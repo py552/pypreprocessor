@@ -2,15 +2,28 @@
 # pypreprocessor.py
 
 __author__ = 'Evan Plaice'
-__coauthor__ = 'Hendi O L, Epikem, Laurent Pinson'
-__version__ = '1.0'
+__coauthor__ = 'Hendi O L, Epikem, Laurent Pinson, py552'
+__version__ = '1.1'
 
 import sys
 import os
 import traceback
-import imp
+try:
+    # for python <= 3.11
+    from imp import lock_held as imp__lock_held
+except ModuleNotFoundError:
+    # for python >= 3.12
+    # https://trycatchdebug.net/news/1047788/the-imp-module-is-deprecated-in-favor-of-importlib-but-lock-held-is-missing
+    import threading
+    threading__lock = threading.Lock()
+    imp__lock_held = threading__lock.locked
 import io
-import collections
+try:
+    # for python <= 3.10
+    from collections import Sequence as collections__Sequence
+except ImportError:
+    # for python >= 3.11
+    from collections.abc import Sequence as collections__Sequence
 import re
 
 #support for <=0.7.7
@@ -23,12 +36,12 @@ class preprocessor:
     __overloaded = []
     defines = customDict()
 
-    def __init__(self, inFile=sys.argv[0], outFile='', defines={}, removeMeta=False, 
-                 escapeChar=None, mode=None, escape='#', run=True, resume=False, 
+    def __init__(self, inFile=sys.argv[0], outFile='', defines={}, removeMeta=False,
+                 escapeChar=None, mode=None, escape='#', run=True, resume=False,
                  save=True, overload=True, quiet=False):
         # public variables
         # support for <=0.7.7
-        if isinstance(defines, collections.Sequence):
+        if isinstance(defines, collections__Sequence):
             for x in defines:
                 self.define(*x.split(':'))
         else:
@@ -45,7 +58,7 @@ class preprocessor:
         self.save = save
         self.overload = overload
         self.quiet = quiet
-        self.readEncoding = sys.stdin.encoding 
+        self.readEncoding = sys.stdin.encoding
         self.writeEncoding = sys.stdout.encoding
 
         # private variables
@@ -54,7 +67,7 @@ class preprocessor:
     def check_deprecation(self):
         """
             Deprecation checks for older implementation of this library
-        
+
         """
         def deprecation(message):
             import warnings
@@ -95,32 +108,32 @@ class preprocessor:
         # due to the introduction of #elif, elements of __ifblocks are duos of boolean
         # the 1st is the evaluation of the current #if or #elif or #else
         # the 2nd indicates if at least one #if or #elif was True in the whole #if/#endif block
-        self.__ifblocks = []  
+        self.__ifblocks = []
         # contains the if conditions
-        self.__ifconditions = [] 
+        self.__ifconditions = []
         self.__outputBuffer = ''
         self.__overloaded = list(self.defines.keys()) if self.overload else []
 
     def define(self, name, val=True):
         """
             Adds variable definition to the store as expected from a #define directive.
-            The directive can contains no value as it would be tested with a #ifdef directive or 
+            The directive can contains no value as it would be tested with a #ifdef directive or
             with a value for an evaluation as in an #if directive.
 
-            Note: if the `name` was part of the initial definition and `overload` was set to 
+            Note: if the `name` was part of the initial definition and `overload` was set to
             True, this new definition will be skipped
-        
+
         :params
             name (str): definition name
-            
+
             val (str): definition value when it exists. Default is None
         """
         # try conversion for number else evaluate() might fail
         try:
             val = int(val)
         except:
-            # assume val is string 
-            pass    
+            # assume val is string
+            pass
         if name not in self.__overloaded:
             self.defines[name]=val
 
@@ -130,7 +143,7 @@ class preprocessor:
 
         :params
             define (str): definition name
-            
+
         """
         if define in self.defines:
             self.defines.pop(define)
@@ -141,7 +154,7 @@ class preprocessor:
 
         :params
             define (str): definition name
-            
+
         """
         return define in self.defines
 
@@ -151,7 +164,7 @@ class preprocessor:
 
         :params
             line (str): definition name
-            
+
         """
         try:
             # replace C-style bool format by Python's
@@ -174,8 +187,8 @@ class preprocessor:
 
     def __is_directive(self, line, directive, *size):
         """
-            Checks the `line` is a `directive` and , if `size` is provided, checks its number of 
-            elements is amongst the list of allowed `size` 
+            Checks the `line` is a `directive` and , if `size` is provided, checks its number of
+            elements is amongst the list of allowed `size`
 
         :params:
             line (str): line to check
@@ -183,7 +196,7 @@ class preprocessor:
             directive (str): directive to be found in the `line`
 
             *size (int): list of allowed number of elements to compose the directive. Can be empty
-        
+
         """
         if line.startswith(self.escape + directive):
             if size and len(line.split()) not in size:
@@ -200,7 +213,7 @@ class preprocessor:
 
         :return
             line (str): cleaned line
-        
+
         """
         line= re.sub('\s*/\*.*\*/\s+', '', line) #remove /* */ C-style comment
         line= re.sub('\s*//.*', '', line) #remove // C-style comment
@@ -208,7 +221,7 @@ class preprocessor:
 
     def lexer(self, line):
         """
-            Analyse the `line`. This method attempts to find a known directive and, when found, to 
+            Analyse the `line`. This method attempts to find a known directive and, when found, to
             understand it and to perform appropriate action.
 
         :params
@@ -314,7 +327,7 @@ class preprocessor:
                     number-=1
             except:
                 if not self.quiet:
-                    print('Warning trying to remove more blocks than present', 
+                    print('Warning trying to remove more blocks than present',
                           self.input, self.__linenum)
 
         elif self.__is_directive(line, 'error'):
@@ -323,12 +336,12 @@ class preprocessor:
                 print('Error directive reached')
                 sys.exit(1)
 
-        else: 
+        else:
             # escapechar + space ==> comment
             # starts with #!/ ==> shebang
             # else print warning
             if len(line.split()[0]) > 1 and not line.startswith('#!/') and not self.quiet:
-                print('Warning unknown directive or comment starting with ', 
+                print('Warning unknown directive or comment starting with ',
                         line.split()[0], self.input, self.__linenum + 1)
 
         return False, True
@@ -340,7 +353,7 @@ class preprocessor:
 
         :params
             directive (str): faulty directive
-            
+
         """
         print('File: "' + self.input + '", line ' + str(self.__linenum + 1))
         print('SyntaxError: Invalid ' + directive + ' directive')
@@ -427,7 +440,7 @@ class preprocessor:
 
         if self.run:
             # if this module is loaded as a library override the import
-            if imp.lock_held() is True:
+            if imp__lock_held() is True:
                 self.override_import()
             else:
                 self.on_the_fly()
