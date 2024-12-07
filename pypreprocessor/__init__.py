@@ -239,11 +239,15 @@ class preprocessor:
         trace = traceback.format_exc().splitlines()
         index = 0
         for line in trace:
+            # https://github.com/interpreters/pypreprocessor/pull/35/commits/7398eb304755ce92b6f13fa95adc78b7eae7b402
+            '''
             if index == (len(trace) - 2):
                 print(line.replace("<string>", self.input))
             else:
                 print(line)
             index += 1
+            '''
+            print(line.replace("\"<string>\"", self.input))
 
     # parsing/processing
     def parse(self):
